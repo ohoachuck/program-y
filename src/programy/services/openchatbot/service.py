@@ -26,6 +26,7 @@ from programy.clients.restful.auth import RestBasicAuthorizationHandler
 from programy.services.openchatbot.parser import OpenChatBotResponseParser
 from programy.utils.console.console import outputLog
 
+import json
 
 class OpenChatRESTService(GenericRESTService):
 
@@ -63,7 +64,12 @@ class OpenChatRESTService(GenericRESTService):
         parser.parse_response(text)
 
         if parser.status.code == 200:
-            return parser.response.to_aiml()
+            #return parser.response.to_aiml() #oho
+            json_response = {}
+            json_response['response'] = parser.response.to_json()
+            json_response['meta'] = parser.meta.to_json()
+            json_response['status'] = parser.status.to_json()
+            return json.dumps(json_response)
 
         return client_context.bot.default_response
 

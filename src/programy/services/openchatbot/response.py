@@ -15,6 +15,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 """
 from programy.utils.console.console import outputLog
+import json
 
 
 class OpenchatBotReponseObject:
@@ -52,7 +53,13 @@ class OpenChatBotMediaDefaultAction(OpenchatBotReponseObject):
 
         outputLog(None, "Unknown Default Action type [%s]" % self.actiontype)
         return None
-
+    
+    def to_json(self):
+        default_action = {}
+        default_action['label'] = self.label
+        default_action['payload'] = self.payload
+        default_action['type'] = self.actiontype
+        return default_action
 
 class OpenChatBotMediaButton(OpenchatBotReponseObject):
 
@@ -82,6 +89,13 @@ class OpenChatBotMediaButton(OpenchatBotReponseObject):
         outputLog(self, "Unknown Button type [%s]" % self.actiontype)
         return None
 
+    def to_json(self):
+        button = {}
+        button['client'] = self.client
+        button['label'] = self.label
+        button['payload'] = self.payload
+        button['type'] = self.actiontype
+        return button
 
 class OpenChatBotMedia(OpenchatBotReponseObject):
 
@@ -127,6 +141,48 @@ class OpenChatBotMedia(OpenchatBotReponseObject):
         aiml += "</card>"
         return aiml
 
+    def to_json(self):
+        media_json = {}
+        media_json['longDesc'] = self.longDesc
+        media_json['mimeType'] = self.mimeType
+        media_json['shortDesc'] = self.shortDesc
+        media_json['src'] = self.src
+        media_json['title'] = self.title
+        media_json['buttons'] = []
+        for button in self.buttons:
+            media_json['buttons'].append(button.to_json())
+        media_json['default_action'] = self.default_action.to_json()
+        return media_json
+
+
+class OpenChatBotChannel(OpenchatBotReponseObject):
+
+    def __init__(self, markup, messaging, sms, tts):
+        self.markup = markup
+        self.messaging = messaging
+        self.sms = sms
+        self.tts = tts
+
+    @staticmethod
+    def parse(json_data):
+        markup = OpenchatBotReponseObject.get_parameter(json_data, 'markup', None)
+        messaging = OpenchatBotReponseObject.get_parameter(json_data, 'messaging', None)
+        sms = OpenchatBotReponseObject.get_parameter(json_data, 'sms', None)
+        tts = OpenchatBotReponseObject.get_parameter(json_data, 'tts', None)
+        return OpenChatBotChannel(markup, messaging, sms, tts)
+
+    def to_aiml(self):
+        aiml = ""
+        return aiml
+
+    def to_json(self):
+        channel_json = {}
+        channel_json['markup'] = self.markup
+        channel_json['messaging'] = self.messaging
+        channel_json['sms'] = self.sms
+        channel_json['tts'] = self.tts #oho
+        return channel_json
+
 
 class OpenChatBotTTS(OpenchatBotReponseObject):
 
@@ -147,6 +203,11 @@ class OpenChatBotTTS(OpenchatBotReponseObject):
         aiml += "</tts>"
         return aiml
 
+    def to_json(self):
+        tts = {}
+        tts['type'] = self.actiontype
+        tts['payload'] = self.payload
+        return tts
 
 class OpenChatBotSuggestion(OpenchatBotReponseObject):
 
@@ -172,17 +233,24 @@ class OpenChatBotSuggestion(OpenchatBotReponseObject):
             return aiml
 
         outputLog(None, "Unknown Suggestion type [%s]" % self.actiontype)
+        # natural_language should triger a new bot query
         return None
 
+    def to_json(self):
+        suggestion_json = {}
+        suggestion_json['label'] = self.label
+        suggestion_json['payload'] = self.payload
+        suggestion_json['type'] = self.actiontype
+        return suggestion_json
 
 class OpenChatBotResponse(OpenchatBotReponseObject):
 
-    def __init__(self, query, userId, timestamp, text, tts, infoURL, media, suggestions, context):
+    def __init__(self, query, userId, timestamp, text, channel, infoURL, media, suggestions, context):
         self.query = query
         self.userId = userId
         self.timestamp = timestamp
         self.text = text
-        self.tts = tts
+        self.channel = channel
         self.infoURL = infoURL
         self.media = media
         self.suggestions = suggestions
@@ -196,15 +264,15 @@ class OpenChatBotResponse(OpenchatBotReponseObject):
         text = OpenchatBotReponseObject.get_parameter(json_data, 'text', None)
         infoURL = OpenchatBotReponseObject.get_parameter(json_data, 'infoURL', None)
 
-        tts = None
-        if 'tts' in json_data:
-            tts = OpenChatBotTTS.parse(json_data['tts'])
+        channel = {}
+        if 'channel' in json_data:
+            channel = OpenChatBotChannel.parse(json_data['channel'])
 
-        media = None
+        media = []
         if 'media' in json_data:
             media = [OpenChatBotMedia.parse(mediax) for mediax in json_data['media']]
 
-        suggestions = None
+        suggestions = []
         if 'suggestions' in json_data:
             suggestions = [OpenChatBotSuggestion.parse(suggestionx) for suggestionx in json_data['suggestions']]
 
@@ -212,7 +280,7 @@ class OpenChatBotResponse(OpenchatBotReponseObject):
         if 'context' in json_data:
             contexts = json_data['context'][:]
 
-        return OpenChatBotResponse(query, userId, timestamp, text, tts, infoURL, media, suggestions, contexts)
+        return OpenChatBotResponse(query, userId, timestamp, text, channel, infoURL, media, suggestions, contexts)
 
     def to_aiml(self):
         aiml = ""
@@ -220,9 +288,9 @@ class OpenChatBotResponse(OpenchatBotReponseObject):
         if self.text is not None:
             aiml += self.text
 
-        if self.tts is not None:
+        if self.channel is not None:
             aiml += " "
-            aiml += self.tts.to_aiml()
+            aiml += self.channel.to_aiml()
 
         if self.media:
             for media in self.media:
@@ -240,6 +308,50 @@ class OpenChatBotResponse(OpenchatBotReponseObject):
 
         return aiml
 
+    def to_json(self):
+        json_response = {}
+
+        if self.query is not None:
+            json_response['query'] = self.query
+        else:
+            json_response['query'] = ""
+
+        if self.userId is not None:
+            json_response['userId'] = self.userId
+        else:
+            json_response['userId'] = ""
+
+        if self.timestamp is not None:
+            json_response['timestamp'] = self.timestamp
+        else:
+            json_response['timestamp'] = ""
+
+        if self.text is not None:
+            json_response['text'] = self.text
+        else:
+            json_response['text'] = ""
+
+        if self.infoURL is not None:
+            json_response['infoURL'] = self.infoURL
+        else:
+            json_response['infoURL'] = ""
+
+        if self.channel:
+            json_response['channel'] = self.channel.to_json()
+        else:
+            json_response['channel'] = {}
+
+        if self.media:
+            json_response['media'] = []
+            for media in self.media:
+                json_response['media'].append(media.to_json())
+        
+        if self.suggestions:
+            json_response['suggestions'] = []
+            for suggestion in self.suggestions:
+                json_response['suggestions'].append(suggestion.to_json())
+
+        return json_response
 
 class OpenChatBotStatus(OpenchatBotReponseObject):
 
@@ -254,6 +366,12 @@ class OpenChatBotStatus(OpenchatBotReponseObject):
             return None
         message = OpenchatBotReponseObject.get_parameter(json_data, 'message', None)
         return OpenChatBotStatus(code, message)
+
+    def to_json(self):
+        status_json = {}
+        status_json['code'] = self.code
+        status_json['message'] = self.message
+        return status_json
 
 
 class OpenChatBotMeta(OpenchatBotReponseObject):
@@ -273,3 +391,13 @@ class OpenChatBotMeta(OpenchatBotReponseObject):
         copyr = OpenchatBotReponseObject.get_parameter(json_data, 'copyright', None)
         authors = OpenchatBotReponseObject.get_parameter(json_data, 'authors', None)
         return OpenChatBotMeta(botName, botIcon, version, copyr, authors)
+    
+    def to_json(self):
+        meta_json = {}
+        meta_json['botName'] = self.botName
+        meta_json['botIcon'] = self.botIcon
+        meta_json['version'] = self.version
+        meta_json['copyright'] = self.copyr
+        meta_json['authors'] = self.authors
+        return meta_json
+

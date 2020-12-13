@@ -23,7 +23,7 @@ from programy.clients.restful.apihandlers import APIHandler_V1_0
 from programy.clients.restful.apihandlers import APIHandler_V2_0
 from programy.clients.restful.apikeys import APIKeysHandler
 from programy.clients.restful.auth import RestAuthorizationHandler
-
+import json
 
 class RestBotClient(BotClient, ABC):
 
@@ -98,20 +98,32 @@ class RestBotClient(BotClient, ABC):
         else:
             metadata['authors'] = ["Keith Sterling"]
 
+        if client_context.brain.properties.has_property("logo"):
+            metadata['botIcon'] = client_context.brain.properties.property("logo")
+        else:
+            metadata['botIcon'] = "http://openchatbot.io/resources/images/ocb-icon_300x300.png"
+
     def ask_question(self, userid, question, metadata=None):
         response = ""
         try:
             self._questions += 1
             client_context = self.create_client_context(userid)
             response = client_context.bot.ask_question(client_context, question, responselogger=self)
-
-            if metadata is not None:
+            if response.endswith("."):
+                response = response[:-1] # remove last dot caracter
+            try:
+                json_response = json.loads(response, strict=False)
+                metadata = json_response['meta']
+            except Exception as e:
+                YLogger.exception_nostack(self, "response is not json formated", e)
                 self._get_metadata(client_context, metadata)
+                return response
+
 
         except Exception as e:
             YLogger.exception_nostack(self, "Failed to ask question", e)
 
-        return response
+        return json.dumps(json_response)
 
     def process_request(self, request, version=1.0):
 

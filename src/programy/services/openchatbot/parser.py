@@ -63,6 +63,8 @@ class OpenChatBotResponseParser:
             return False
 
         self.meta = self.get_meta(payload)
+        if self.meta is None:
+            return False
 
         if self.status.code == 200:
             return True

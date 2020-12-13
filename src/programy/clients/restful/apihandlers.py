@@ -18,7 +18,7 @@ from abc import ABC
 from abc import abstractmethod
 from datetime import datetime
 from programy.utils.console.console import outputLog
-
+import json
 
 class APIHandler(ABC):
     UNKNOWN = "Unknown"
@@ -97,10 +97,11 @@ class APIHandler_V2_0(APIHandler):
             # location = self._bot_client.get_variable(request, APIHandler_V2_0.LOCATION, method)
 
             metadata = {}
-            answer = self._bot_client.ask_question(userid, query, metadata)
+            answer = self._bot_client.ask_question(userid, query, metadata) # handled by restful/client.py
             client_context = client.create_client_context(userid)
-            rendered = client.renderer.render(client_context, answer)
+            rendered = client.renderer.render(client_context, answer) # ???
             return self.format_success_response(userid, query, rendered, metadata), 200
+            #return self.format_success_response(userid, query, answer, metadata), 200
 
         except Exception as excep:
             return self.format_error_response(userid, query, str(excep), None), 500
@@ -109,27 +110,63 @@ class APIHandler_V2_0(APIHandler):
         return datetime.timestamp(datetime.now())
 
     def format_success_response(self, userid, question, answer, metadata=None):
+        try:
+            json_answer = json.loads(answer, strict=False)
+            answer_text = json_answer['response']['text']
+            if 'infoURL' in json_answer['response']:                
+                answer_infoURL = json_answer['response']['infoURL']
+            if 'channel' in json_answer['response']:
+                if 'tts' in json_answer['response']['channel']:
+                    answer_channel_tts = json_answer['response']['channel']['tts']
+                else:
+                    answer_channel_tts = {}
+            if 'media' in json_answer['response']:
+                answer_media = json_answer['response']['media']
+            else:
+                answer_media = []
+            if 'suggestions' in json_answer['response']:
+                answer_suggestions = json_answer['response']['suggestions']
+            else:
+                answer_suggestions = []
+            
+        except:
+            answer_text = answer
+            answer_infoURL = ""
+            answer_channel_tts = ""
+            answer_media = []
+            answer_suggestions = []
+
         payload = {'response': {"query": question,
                                 "userId": userid,
                                 "timestamp": self._get_timestamp(),
-                                "text": answer,
+                                "text": answer_text,
+                                "infoURL": answer_infoURL,
+                                "channel": {
+                                    "tts": answer_channel_tts
+                                    },
+                                "media": answer_media,
+                                "suggestions": answer_suggestions
                                 },
                    'status': {
                        'code': 200,
                        'message': 'success'
                    }}
 
-        if metadata is not None:
+        if metadata:
             payload["meta"] = {}
             if 'botName' in metadata:
                 payload["meta"]['botName'] = metadata['botName']
+            if 'botIcon' in metadata:
+                payload["meta"]['botIcon'] = metadata['botIcon']
             if 'version' in metadata:
                 payload["meta"]['version'] = metadata['version']
             if 'copyright' in metadata:
                 payload["meta"]['copyright'] = metadata['copyright']
             if 'authors' in metadata:
                 payload["meta"]['authors'] = metadata['authors']
-
+        else:
+            payload['meta'] = json_answer['meta']
+        
         return payload
 
     def format_error_response(self, userid, question, error, metadata=None):
@@ -143,11 +180,16 @@ class APIHandler_V2_0(APIHandler):
                    }}
 
         if metadata is not None:
-            payload["meta"] = {
-                "botName": metadata['botName'],
-                "version": metadata['version'],
-                "copyright": metadata['copyright'],
-                "authors": metadata['authors']
-            }
+            payload["meta"] = {}
+            if 'botName' in metadata:
+                payload["meta"]['botName'] = metadata['botName']
+            if 'botIcon' in metadata:
+                payload["meta"]['botIcon'] = metadata['botIcon']
+            if 'version' in metadata:
+                payload["meta"]['version'] = metadata['version']
+            if 'copyright' in metadata:
+                payload["meta"]['copyright'] = metadata['copyright']
+            if 'authors' in metadata:
+                payload["meta"]['authors'] = metadata['authors']
 
         return payload
